@@ -6,12 +6,16 @@
  * When this callback is fired, it will toggle line 2 of the LCD text between
  * "I was pressed!" and nothing.
  */
-void on_center_button() {
+void on_center_button()
+{
 	static bool pressed = false;
 	pressed = !pressed;
-	if (pressed) {
+	if (pressed)
+	{
 		pros::lcd::set_text(2, "I was pressed!");
-	} else {
+	}
+	else
+	{
 		pros::lcd::clear_line(2);
 	}
 }
@@ -22,7 +26,8 @@ void on_center_button() {
  * All other competition modes are blocked by initialize; it is recommended
  * to keep execution time for this mode under a few seconds.
  */
-void initialize() {
+void initialize()
+{
 	pros::lcd::initialize();
 	pros::lcd::set_text(1, "Hello PROS User!");
 
@@ -58,67 +63,78 @@ void competition_initialize() {}
  * will be stopped. Re-enabling the robot will restart the task, not re-start it
  * from where it left off.
  */
-void autonomous() {
-	pros::Motor left_wheels (LEFT_WHEELS_PORT);
-	pros::Motor right_wheels (RIGHT_WHEELS_PORT); // This reverses the motor
+void autonomous()
+{
+	pros::Motor left_wheels(LEFT_WHEELS_PORT);
+	pros::Motor right_wheels(RIGHT_WHEELS_PORT); // This reverses the motor
 	right_wheels.set_reversed(true);
 
 	right_wheels.move_relative(1000, MOTOR_MAX_SPEED);
 	left_wheels.move_relative(1000, MOTOR_MAX_SPEED);
 }
 
+void opcontrol()
+{
+	pros::Motor left_wheels(LEFT_WHEELS_PORT);
+	pros::Motor right_wheels(RIGHT_WHEELS_PORT);
+	right_wheels.set_reversed(true);
+	pros::Motor arm(ARM_PORT, pros::v5::MotorGears::red);
+	pros::Motor claw(CLAW_PORT, pros::v5::MotorGears::red); // Set the red gearset for the arm and claw motor
 
-void opcontrol() {
-  pros::Motor left_wheels(LEFT_WHEELS_PORT);
-  pros::Motor right_wheels(RIGHT_WHEELS_PORT);
-  right_wheels.set_reversed(true);
-  pros::Motor arm(ARM_PORT, pros::v5::MotorGears::red); 
-  pros::Motor claw(CLAW_PORT, pros::v5::MotorGears::red); //Set the red gearset for the arm and claw motor
+	pros::ADIDigitalIn left_bumper(LEFT_BUMPER_PORT);
+	pros::ADIDigitalIn right_bumper(RIGHT_BUMPER_PORT);
+	pros::ADIDigitalIn arm_limit(ARM_LIMIT_SWITCH_PORT);
 
-  pros::ADIDigitalIn left_bumper (LEFT_BUMPER_PORT);
-  pros::ADIDigitalIn right_bumper (RIGHT_BUMPER_PORT);
-  pros::ADIDigitalIn arm_limit (ARM_LIMIT_SWITCH_PORT);
+	pros::Controller master(CONTROLLER_MASTER);
 
-  pros::Controller master(CONTROLLER_MASTER);
+	while (true)
+	{
+		int power = master.get_analog(ANALOG_LEFT_Y);
+		int turn = master.get_analog(ANALOG_RIGHT_X);
+		int left = power + turn;
+		int right = power - turn;
 
-  while (true) {
-    int power = master.get_analog(ANALOG_LEFT_Y);
-    int turn = master.get_analog(ANALOG_RIGHT_X);
-    int left = power + turn;
-    int right = power - turn;
+		if (left_bumper.get_value() || right_bumper.get_value())
+		{
+			// One of the bump switches is currently pressed
+			if (left < 0)
+			{
+				left = 0;
+			}
+			if (right < 0)
+			{
+				right = 0;
+			}
+		}
+		left_wheels.move(left);
+		right_wheels.move(right);
 
-    if (left_bumper.get_value() || right_bumper.get_value()) {
-      // One of the bump switches is currently pressed
-      if (left < 0) {
-        left = 0;
-      }
-      if (right < 0) {
-        right = 0;
-      }
-    }
-    left_wheels.move(left);
-    right_wheels.move(right);
+		if (master.get_digital(DIGITAL_R1))
+		{
+			arm.move_velocity(100); // This is 100 because it's a 100rpm motor
+		}
+		else if (master.get_digital(DIGITAL_R2) && !arm_limit.get_value())
+		{
+			arm.move_velocity(-100);
+		}
+		else
+		{
+			arm.move_velocity(0);
+		}
 
-    if (master.get_digital(DIGITAL_R1)) {
-      arm.move_velocity(100); // This is 100 because it's a 100rpm motor
-    }
-    else if (master.get_digital(DIGITAL_R2) && !arm_limit.get_value()) {
-      arm.move_velocity(-100);
-    }
-    else {
-      arm.move_velocity(0);
-    }
+		if (master.get_digital(DIGITAL_L1))
+		{
+			claw.move_velocity(100);
+		}
+		else if (master.get_digital(DIGITAL_L2))
+		{
+			claw.move_velocity(-100);
+		}
+		else
+		{
+			claw.move_velocity(0);
+		}
 
-    if (master.get_digital(DIGITAL_L1)) {
-      claw.move_velocity(100);
-    }
-    else if (master.get_digital(DIGITAL_L2)) {
-      claw.move_velocity(-100);
-    }
-    else {
-      claw.move_velocity(0);
-    }
-
-    pros::delay(2);
-  }
+		pros::delay(2);
+	}
 }
